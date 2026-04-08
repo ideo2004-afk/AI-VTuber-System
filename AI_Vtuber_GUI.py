@@ -18,6 +18,7 @@ import OpenAI.gpt.OpenAI_GPT_API as gpt
 import TextToSpeech.edgeTTS as edgetts
 import TextToSpeech.OpenAITTS as openaitts
 import Google.gemini.GoogleAI_Gemini_API as gemini
+import Ollama.Ollama_API as ollama
 import Sentiment_Analysis.NLP_API as sa_nlp
 import Live_Chat.Live_Chat as live_chat
 import Play_Audio as plau
@@ -54,11 +55,151 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
         super().__init__()
         # Set up GUI
         self.setupUi(self)
+        # Allow window resizing (original UI sets Fixed policy which prevents it)
+        self.setSizePolicy(QtWidgets.QSizePolicy.Policy.Preferred, QtWidgets.QSizePolicy.Policy.Preferred)
+        self.setMinimumSize(QtCore.QSize(800, 600))
+        
         global GUI_config, GUI_config_path
+
+        # Dynamic Ollama UI setup (3rd Column)
+        self.LLM_verticalLayout_Ollama = QtWidgets.QVBoxLayout()
+        self.LLM_verticalLayout_Ollama.setSpacing(25)
+        self.LLM_verticalLayout_Ollama.setObjectName(u"LLM_verticalLayout_Ollama")
+        
+        self.LLM_RB_Ollama = QtWidgets.QRadioButton(self.Tab_LLM)
+        self.LLM_RB_Ollama.setObjectName(u"LLM_RB_Ollama")
+        self.LLM_RB_Ollama.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_RB_Ollama.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_RB_Ollama.setText("Ollama")
+        self.LLM_RB_Ollama.setStyleSheet("color: white;")
+        self.LLM_verticalLayout_Ollama.addWidget(self.LLM_RB_Ollama)
+        
+        # Ollama Model Row
+        self.LLM_horizontalLayout_Ol_Model = QtWidgets.QHBoxLayout()
+        self.LLM_horizontalLayout_Ol_Model.setSpacing(0)
+        self.LLM_Lb_Ol_Model = QtWidgets.QLabel(self.Tab_LLM)
+        self.LLM_Lb_Ol_Model.setText("Model")
+        self.LLM_Lb_Ol_Model.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_Lb_Ol_Model.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_horizontalLayout_Ol_Model.addWidget(self.LLM_Lb_Ol_Model)
+        
+        self.LLM_CB_Ol_Model = QtWidgets.QComboBox(self.Tab_LLM)
+        self.LLM_CB_Ol_Model.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_CB_Ol_Model.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_CB_Ol_Model.setStyleSheet("font: 75 12pt \"Microsoft YaHei\"; border-color: rgb(255, 0, 0); background-color: rgb(80, 80, 80); color: rgb(255, 255, 255);")
+        self.LLM_horizontalLayout_Ol_Model.addWidget(self.LLM_CB_Ol_Model)
+        self.LLM_verticalLayout_Ollama.addLayout(self.LLM_horizontalLayout_Ol_Model)
+        
+        # Ollama Base URL Row
+        self.LLM_horizontalLayout_Ol_BaseURL = QtWidgets.QHBoxLayout()
+        self.LLM_horizontalLayout_Ol_BaseURL.setSpacing(0)
+        self.LLM_Lb_Ol_BaseURL = QtWidgets.QLabel(self.Tab_LLM)
+        self.LLM_Lb_Ol_BaseURL.setText("Base URL")
+        self.LLM_Lb_Ol_BaseURL.setMinimumSize(QtCore.QSize(220, 30))
+        self.LLM_Lb_Ol_BaseURL.setMaximumSize(QtCore.QSize(220, 30))
+        self.LLM_horizontalLayout_Ol_BaseURL.addWidget(self.LLM_Lb_Ol_BaseURL)
+        
+        self.LLM_LE_Ol_BaseURL = QtWidgets.QLineEdit(self.Tab_LLM)
+        self.LLM_LE_Ol_BaseURL.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_LE_Ol_BaseURL.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_LE_Ol_BaseURL.setStyleSheet("color: white; background-color: rgb(40, 40, 40);")
+        self.LLM_horizontalLayout_Ol_BaseURL.addWidget(self.LLM_LE_Ol_BaseURL)
+        self.LLM_verticalLayout_Ollama.addLayout(self.LLM_horizontalLayout_Ol_BaseURL)
+
+        # Ollama Timeout Row
+        self.LLM_horizontalLayout_Ol_Timeout = QtWidgets.QHBoxLayout()
+        self.LLM_horizontalLayout_Ol_Timeout.setSpacing(0)
+        self.LLM_Lb_Ol_Timeout = QtWidgets.QLabel(self.Tab_LLM)
+        self.LLM_Lb_Ol_Timeout.setText("Timeout(s)")
+        self.LLM_Lb_Ol_Timeout.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_Lb_Ol_Timeout.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_horizontalLayout_Ol_Timeout.addWidget(self.LLM_Lb_Ol_Timeout)
+        
+        self.LLM_SB_Ol_Timeout = QtWidgets.QSpinBox(self.Tab_LLM)
+        self.LLM_SB_Ol_Timeout.setRange(5, 300)
+        self.LLM_SB_Ol_Timeout.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_SB_Ol_Timeout.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_SB_Ol_Timeout.setStyleSheet("color: white; background-color: rgb(40, 40, 40);")
+        self.LLM_SB_Ol_Timeout.setAlignment(QtCore.Qt.AlignRight|QtCore.Qt.AlignTrailing|QtCore.Qt.AlignVCenter)
+        self.LLM_horizontalLayout_Ol_Timeout.addWidget(self.LLM_SB_Ol_Timeout)
+        self.LLM_verticalLayout_Ollama.addLayout(self.LLM_horizontalLayout_Ol_Timeout)
+
+        # Ollama Retry/Refresh Row
+        self.LLM_horizontalLayout_Ol_Misc = QtWidgets.QHBoxLayout()
+        self.LLM_horizontalLayout_Ol_Misc.setSpacing(0)
+        self.LLM_Lb_Ol_Retry = QtWidgets.QLabel(self.Tab_LLM)
+        self.LLM_Lb_Ol_Retry.setText("Retry")
+        self.LLM_Lb_Ol_Retry.setMinimumSize(QtCore.QSize(0, 30))
+        self.LLM_Lb_Ol_Retry.setMaximumSize(QtCore.QSize(16777215, 30))
+        self.LLM_horizontalLayout_Ol_Misc.addWidget(self.LLM_Lb_Ol_Retry)
+        
+        self.LLM_SB_Ol_Retry = QtWidgets.QSpinBox(self.Tab_LLM)
+        self.LLM_SB_Ol_Retry.setRange(1, 10)
+        self.LLM_SB_Ol_Retry.setMinimumSize(QtCore.QSize(40, 30))
+        self.LLM_SB_Ol_Retry.setMaximumSize(QtCore.QSize(40, 30))
+        self.LLM_SB_Ol_Retry.setStyleSheet("color: white; background-color: rgb(40, 40, 40);")
+        self.LLM_horizontalLayout_Ol_Misc.addWidget(self.LLM_SB_Ol_Retry)
+        
+        self.LLM_Bt_Ol_Refresh = QtWidgets.QPushButton(self.Tab_LLM)
+        self.LLM_Bt_Ol_Refresh.setText("Refresh")
+        self.LLM_Bt_Ol_Refresh.setMinimumSize(QtCore.QSize(70, 30))
+        self.LLM_Bt_Ol_Refresh.setMaximumSize(QtCore.QSize(16777215, 30))
+        palette = self.UC_Bt_Clear.palette()
+        self.LLM_Bt_Ol_Refresh.setPalette(palette)
+        self.LLM_horizontalLayout_Ol_Misc.addWidget(self.LLM_Bt_Ol_Refresh)
+        self.LLM_verticalLayout_Ollama.addLayout(self.LLM_horizontalLayout_Ol_Misc)
+
+        # Add Ollama vertical layout to the main horizontal layout in the middle
+        if hasattr(self, "LLM_horizontalLayout_13"):
+            # Insert before the last spacer (Gemini, Spacer, GPT, Spacer)
+            # Actually, let's just append and let it expand
+            self.LLM_horizontalLayout_13.addLayout(self.LLM_verticalLayout_Ollama)
+            self.LLM_horizontalSpacer_Ol = QtWidgets.QSpacerItem(0, 20, QtWidgets.QSizePolicy.Policy.Expanding, QtWidgets.QSizePolicy.Policy.Minimum)
+            self.LLM_horizontalLayout_13.addItem(self.LLM_horizontalSpacer_Ol)
+
+        # --- Enhanced UI: Connection Buttons for macOS Accessibility ---
+        
+        # VTSP Connection Button
+        self.VTSP_Bt_Connect = QtWidgets.QPushButton("Connect VTube Studio")
+        self.VTSP_Bt_Connect.setCheckable(True)
+        self.VTSP_Bt_Connect.setMinimumSize(QtCore.QSize(0, 40))
+        self.VTSP_Bt_Connect.setFont(QtGui.QFont("Microsoft YaHei", 10, QtGui.QFont.Weight.Bold))
+        self.VTSP_Bt_Connect.setStyleSheet("background-color: rgb(80, 40, 40); color: white; border-radius: 5px;")
+        
+        if hasattr(self, "Tab_VTubeStudioPlugverticalLayout"):
+            self.Tab_VTubeStudioPlugverticalLayout.insertWidget(0, self.VTSP_Bt_Connect)
+        
+        # OBS Connection Button
+        self.OBS_Bt_Connect = QtWidgets.QPushButton("Connect OBS Websocket")
+        self.OBS_Bt_Connect.setCheckable(True)
+        self.OBS_Bt_Connect.setMinimumSize(QtCore.QSize(0, 40))
+        self.OBS_Bt_Connect.setFont(QtGui.QFont("Microsoft YaHei", 10, QtGui.QFont.Weight.Bold))
+        self.OBS_Bt_Connect.setStyleSheet("background-color: rgb(40, 40, 80); color: white; border-radius: 5px;")
+        
+        # Absolute positioning for OBS tab as it doesn't have a structured layout
+        if hasattr(self, "Tab_OBS"):
+            # Put it at the top, shifted right to avoid overlapping subtitles formatter
+            self.OBS_Bt_Connect.setParent(self.Tab_OBS)
+            self.OBS_Bt_Connect.setGeometry(QtCore.QRect(400, 40, 250, 40))
+        
+        # Link Buttons to Menu Actions
+        self.VTSP_Bt_Connect.clicked.connect(self.mVTSP_Hotkeys.trigger)
+        self.OBS_Bt_Connect.clicked.connect(self.mOBSws.trigger)
+        
+        # Bi-directional sync
+        self.mVTSP_Hotkeys.toggled.connect(self.VTSP_Bt_Connect.setChecked)
+        self.mOBSws.toggled.connect(self.OBS_Bt_Connect.setChecked)
+
+        
+        self.LLM_CB_Ol_Model.currentTextChanged.connect(self.Ollama_Select_model)
+        self.LLM_Bt_Ol_Refresh.clicked.connect(self.Refresh_available_ollama_model)
+        self.LLM_LE_Ol_BaseURL.textChanged.connect(self.Ollama_Base_URL)
+        self.LLM_SB_Ol_Timeout.valueChanged.connect(self.Ollama_timeout)
+        self.LLM_SB_Ol_Retry.valueChanged.connect(self.Ollama_retry)
 
         # Make the icon show correctly
         icon = QtGui.QIcon()
-        icon.addPixmap(QtGui.QPixmap("GUI_control_panel\GUI_icon\AI_Vtuber_GUI_control_panel_01.ico"))
+        icon.addPixmap(QtGui.QPixmap("GUI_control_panel/GUI_icon/AI_Vtuber_GUI_control_panel_01.ico"))
         self.setWindowIcon(icon)
         self.MW_Tab.setCurrentIndex(0)
         ### Make the icon show correctly
@@ -415,6 +556,13 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
             self.LLM_RB_Gemini.setChecked(True)
         elif llm_using == "GPT":
             self.LLM_RB_GPT.setChecked(True)
+        elif llm_using == "Ollama":
+            if hasattr(self, "LLM_RB_Ollama"):
+                self.LLM_RB_Ollama.setChecked(True)
+            else:
+                llm_using = "Gemini"
+                GUI_config["LLM"]["using"] = llm_using
+                self.LLM_RB_Gemini.setChecked(True)
         else:
             llm_using = "Gemini"
             GUI_config["LLM"]["using"] = llm_using
@@ -622,6 +770,51 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
         self.LLM_SB_GPT_Retry.setValue(gpt_retry)
         gpt.gpt_parameters["retry"] = gpt_retry
         ### LLM GPT retry
+
+
+        gpt.gpt_parameters["retry"] = gpt_retry
+        ### LLM GPT retry
+
+
+        # LLM Ollama settings
+        if "LLM_Ollama" not in GUI_config:
+            GUI_config["LLM_Ollama"] = {
+                "model" : "gemma3:12b-it-qat",
+                "base_url" : "http://localhost:11434",
+                "max_output_tokens" : "512",
+                "temperature" : "0.8",
+                "timeout" : "120",
+                "retry" : "3",
+            }
+        
+        ollama_base_url = str(GUI_config["LLM_Ollama"]["base_url"])
+        self.LLM_LE_Ol_BaseURL.setText(ollama_base_url)
+        ollama.ollama_parameters["base_url"] = ollama_base_url
+
+        self.Refresh_available_ollama_model()
+        
+        ollama_model = str(GUI_config["LLM_Ollama"]["model"])
+        if ollama_model in [self.LLM_CB_Ol_Model.itemText(i) for i in range(self.LLM_CB_Ol_Model.count())]:
+            self.LLM_CB_Ol_Model.setCurrentText(ollama_model)
+        else:
+            ollama_model = self.LLM_CB_Ol_Model.currentText()
+            GUI_config["LLM_Ollama"]["model"] = ollama_model
+        ollama.ollama_parameters["model"] = ollama_model
+        
+        ollama_max_output_tokens = int(GUI_config["LLM_Ollama"]["max_output_tokens"])
+        ollama.ollama_parameters["max_output_tokens"] = ollama_max_output_tokens
+        
+        ollama_temperature = round(float(GUI_config["LLM_Ollama"]["temperature"]), 2)
+        ollama.ollama_parameters["temperature"] = ollama_temperature
+        
+        ollama_timeout = int(GUI_config["LLM_Ollama"]["timeout"])
+        self.LLM_SB_Ol_Timeout.setValue(ollama_timeout)
+        ollama.ollama_parameters["timeout"] = ollama_timeout
+        
+        ollama_retry = int(GUI_config["LLM_Ollama"]["retry"])
+        self.LLM_SB_Ol_Retry.setValue(ollama_retry)
+        ollama.ollama_parameters["retry"] = ollama_retry
+        ### LLM Ollama settings
 
 
 
@@ -1537,6 +1730,7 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
 
         self.LLM_RB_Gemini.clicked.connect(self.LLM_Gemini)
         self.LLM_RB_GPT.clicked.connect(self.LLM_GPT)
+        self.LLM_RB_Ollama.clicked.connect(self.LLM_Ollama)
 
         self.LLM_cB_Instruction_enhance.clicked.connect(self.LLM_instruction_enhance)
         self.LLM_SB_Instruction_enhance.valueChanged.connect(self.LLM_instruction_enhance_i)
@@ -1636,6 +1830,33 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
 
 
 
+        # Globally override fixed/minimum sizes to allow a much more compact UI
+        # This is at the end of __init__ to catch even dynamically added widgets like Ollama
+        for widget in self.findChildren(QtWidgets.QWidget):
+            if hasattr(widget, 'setMinimumSize'):
+                if not isinstance(widget, QtWidgets.QScrollBar):
+                    widget.setMinimumSize(QtCore.QSize(0, 0))
+            
+            if hasattr(widget, 'setMaximumWidth'):
+                if widget.maximumSize().width() < 16777215:
+                     widget.setMaximumWidth(16777215)
+        
+        # Ensure major text areas and buttons expand correctly
+        expanding_widgets = [
+            "UC_Bt_Enter", "UC_TE_Input", "CH_TE_Conversation_history", 
+            "UC_Bt_Clear", "UC_Bt_Mic", "UC_LE_username", "UC_CB_Role_select", "UC_LB_User_Chat",
+            "CH_Bt_Reset", "CH_Lb_Conversation_history", "CH_cB_Show_chat_role"
+        ]
+        for widget_name in expanding_widgets:
+            if hasattr(self, widget_name):
+                widget = getattr(self, widget_name)
+                widget.setSizePolicy(QtWidgets.QSizePolicy.Policy.Expanding, widget.sizePolicy().verticalPolicy())
+                if widget_name == "CH_TE_Conversation_history":
+                    widget.setMinimumHeight(100) # Allow conversation history to be compact
+
+        # Set a much smaller default window size for this "Controller" program
+        self.resize(850, 600)
+
     # GUI Functions
 
     def menuLC_YouTube(self):
@@ -1691,30 +1912,53 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
 
 
 
-    def mOBSWS(self):
-        if self.mOBSws.isChecked() and not obsws.OBS_Connected:
-            oc = GUI_OBSWS_connect(self)
-            oc.signal_OBSWS_connect_fail.connect(self.mOBSWS_unChecked)
-            oc.start()
-        
-        elif not self.mOBSws.isChecked() and obsws.OBS_Connected:
-            od = GUI_OBSWS_disconnect(self)
-            od.start()
-
-    def mOBSWS_unChecked(self, signal_bool):
-        if not signal_bool:
-            self.mOBSws.setChecked(False)
-
-
-
     def menuVTSP_Hotkeys(self):
         if self.mVTSP_Hotkeys.isChecked():
+            self.VTSP_Bt_Connect.setText("Connecting...")
+            self.VTSP_Bt_Connect.setStyleSheet("background-color: rgb(80, 80, 40); color: white;")
             vtsp_a = GUI_AIVT_VTSP_authenticated(self)
             vtsp_a.signal_vtsp_authenticated_fail.connect(self.menuVTSP_Hotkeys_unChecked)
+            vtsp_a.finished.connect(self.update_vtsp_button_status)
             vtsp_a.start()
         else:
             print("!!! VTSP API Disconnect !!!")
-            vtsp.AIVT_VTSP_Status["authenticated"] = False
+            vtsp.AIVT_VTSP_disconnect()
+            self.update_vtsp_button_status()
+
+    def update_vtsp_button_status(self):
+        if vtsp.AIVT_VTSP_Status["authenticated"]:
+            self.VTSP_Bt_Connect.setText("VTube Studio: Connected")
+            self.VTSP_Bt_Connect.setStyleSheet("background-color: rgb(40, 100, 40); color: white; border: 2px solid green;")
+            self.VTSP_Bt_Connect.setChecked(True)
+        else:
+            self.VTSP_Bt_Connect.setText("Connect VTube Studio")
+            self.VTSP_Bt_Connect.setStyleSheet("background-color: rgb(80, 40, 40); color: white;")
+            self.VTSP_Bt_Connect.setChecked(False)
+
+    def mOBSWS(self):
+        if self.mOBSws.isChecked() and not obsws.OBS_Connected:
+            self.OBS_Bt_Connect.setText("Connecting OBS...")
+            self.OBS_Bt_Connect.setStyleSheet("background-color: rgb(80, 80, 40); color: white;")
+            oc = GUI_OBSWS_connect(self)
+            oc.signal_OBSWS_connect_fail.connect(self.mOBSWS_unChecked)
+            oc.finished.connect(self.update_obs_button_status)
+            oc.start()
+        
+        elif not self.mOBSws.isChecked() and obsws.OBS_Connected:
+            self.OBS_Bt_Connect.setText("Disconnecting OBS...")
+            od = GUI_OBSWS_disconnect(self)
+            od.finished.connect(self.update_obs_button_status)
+            od.start()
+
+    def update_obs_button_status(self):
+        if obsws.OBS_Connected:
+            self.OBS_Bt_Connect.setText("OBS: Connected")
+            self.OBS_Bt_Connect.setStyleSheet("background-color: rgb(40, 100, 40); color: white; border: 2px solid green;")
+            self.OBS_Bt_Connect.setChecked(True)
+        else:
+            self.OBS_Bt_Connect.setText("Connect OBS Websocket")
+            self.OBS_Bt_Connect.setStyleSheet("background-color: rgb(40, 40, 80); color: white;")
+            self.OBS_Bt_Connect.setChecked(False)
 
     def menuVTSP_Hotkeys_unChecked(self):
         self.mVTSP_Hotkeys.setChecked(False)
@@ -1739,6 +1983,21 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
         if chat_role == "assistant":
             self.CH_TE_Conversation_history.append(f"{ai_name} :\n{ai_ans}\n\n----------\n")
 
+        elif chat_role == "system":
+            if ai_ans == "command:force_stop_mic":
+                aprint("User Mic OFF (Auto)")
+                palette = self.UC_Bt_Mic.palette()
+                palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(225, 0, 0)) #red
+                self.UC_Bt_Mic.setPalette(palette)
+                aivtui.GUI_Auto_Mic_Mode = True
+                return
+            elif ai_ans == "command:start_mic":
+                if not mcrc.user_mic_status["mic_on"] and getattr(aivtui, "GUI_Auto_Mic_Mode", False):
+                    self.UserChat_Mic()
+                return
+
+            self.CH_TE_Conversation_history.append(f"🤖 系統提示 :\n{ai_ans}\n\n----------\n")
+
         else:
             self.CH_TE_Conversation_history.append(f"{chat_now}\n\n{ai_name} :\n{ai_ans}\n\n----------\n")
 
@@ -1758,9 +2017,14 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
 
 
     def UserChat_Mic(self):
+        # Reset auto mode whenever there's any toggle interaction.
+        # Programmatic calls will re-enable it immediately after.
+        aivtui.GUI_Auto_Mic_Mode = False
+        
         mcrc.user_mic_status["mic_on"] = not mcrc.user_mic_status["mic_on"]
         if mcrc.user_mic_status["mic_on"]:
             aprint("User Mic ON")
+            self.CH_TE_Conversation_history.append(f"🤖 系統提示 :\n等待輸入語音....\n\n----------\n")
             palette = self.UC_Bt_Mic.palette()
             palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(255, 124, 67)) #orange
             self.UC_Bt_Mic.setPalette(palette)
@@ -1987,14 +2251,27 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
 
 
     def Setting_User_mic_hotkey_using(self):
+        import platform
+        if platform.system() == "Darwin":
+            self.St_cB_User_mic_hotkey1.setChecked(False)
+            self.St_cB_User_mic_hotkey2.setChecked(False)
+            QtWidgets.QMessageBox.warning(self, "Warning", "Hotkeys are currently not supported on macOS due to OS restrictions.")
+            return
+
         enble = self.St_cB_User_mic_hotkey1.isChecked() or self.St_cB_User_mic_hotkey2.isChecked()
         mcrc.user_mic_status["mic_hotkeys_using"] = enble
         mcrc.user_mic_status["mic_hotkey_1_using"] = self.St_cB_User_mic_hotkey1.isChecked()
         mcrc.user_mic_status["mic_hotkey_2_using"] = self.St_cB_User_mic_hotkey2.isChecked()
+        global GUI_config
         GUI_config["Setting"]["user_mic_hotkey_1_using"] = str(self.St_cB_User_mic_hotkey1.isChecked())
         GUI_config["Setting"]["user_mic_hotkey_2_using"] = str(self.St_cB_User_mic_hotkey2.isChecked())
 
     def Setting_User_mic_hotkey1(self):
+        import platform
+        if platform.system() == "Darwin":
+            QtWidgets.QMessageBox.warning(self, "Warning", "Hotkey detection is not supported on macOS. Please use the Mic button manually.")
+            return
+
         if not mcrc.user_mic_status["mic_hotkey_1_detecting"]:
             palette = self.UC_Bt_Mic.palette()
             palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(255, 0, 0)) #red
@@ -2019,6 +2296,10 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
 
 
     def Setting_User_mic_hotkey2(self):
+        import platform
+        if platform.system() == "Darwin":
+            return
+
         if not mcrc.user_mic_status["mic_hotkey_2_detecting"]:
             palette = self.UC_Bt_Mic.palette()
             palette.setColor(QtGui.QPalette.ColorRole.ButtonText, QtGui.QColor(255, 0, 0)) #red
@@ -2240,6 +2521,53 @@ class AI_Vtuber_GUI(gui.Ui_MainWindow, QtWidgets.QMainWindow, QtWidgets.QPushBut
         GUI_config["LLM"]["using"] = using
         aivtui.GUI_LLM_parameters["model"] = using
         aprint("LLM selected: GPT")
+
+    def LLM_Ollama(self):
+        global GUI_config
+        using = "Ollama"
+        GUI_config["LLM"]["using"] = using
+        aivtui.GUI_LLM_parameters["model"] = using
+        aprint("LLM selected: Ollama")
+
+    def Ollama_Select_model(self):
+        global GUI_config
+        model = self.LLM_CB_Ol_Model.currentText()
+        if model:
+            ollama.ollama_parameters["model"] = model
+            GUI_config["LLM_Ollama"]["model"] = model
+
+    def Refresh_available_ollama_model(self):
+        base_url = self.LLM_LE_Ol_BaseURL.text()
+        models = ollama.get_available_models(base_url)
+        
+        current_model = self.LLM_CB_Ol_Model.currentText()
+        self.LLM_CB_Ol_Model.clear()
+        
+        for name in models:
+            self.LLM_CB_Ol_Model.addItem(name)
+            
+        if current_model in models:
+            self.LLM_CB_Ol_Model.setCurrentText(current_model)
+        elif models:
+            self.LLM_CB_Ol_Model.setCurrentText(models[0])
+
+    def Ollama_Base_URL(self):
+        global GUI_config
+        url = self.LLM_LE_Ol_BaseURL.text()
+        ollama.ollama_parameters["base_url"] = url
+        GUI_config["LLM_Ollama"]["base_url"] = url
+
+    def Ollama_timeout(self):
+        global GUI_config
+        timeout = self.LLM_SB_Ol_Timeout.value()
+        ollama.ollama_parameters["timeout"] = timeout
+        GUI_config["LLM_Ollama"]["timeout"] = str(timeout)
+
+    def Ollama_retry(self):
+        global GUI_config
+        retry = self.LLM_SB_Ol_Retry.value()
+        ollama.ollama_parameters["retry"] = retry
+        GUI_config["LLM_Ollama"]["retry"] = str(retry)
 
 
     def LLM_instruction_enhance(self):

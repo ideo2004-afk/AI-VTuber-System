@@ -21,6 +21,7 @@ import OpenAI.whisper.OpenAI_Whisper as whisper
 import OpenAI.whisper.OpenAI_Whisper_API as whisper_api
 import OpenAI.gpt.OpenAI_GPT_API as gpt_api
 import Google.gemini.GoogleAI_Gemini_API as gimini_api
+import Ollama.Ollama_API as ollama_api
 import Sentiment_Analysis.NLP_API as sa_nlp_api
 import Live_Chat.Live_Chat as live_chat
 from My_Tools.AIVT_print import aprint
@@ -77,17 +78,63 @@ def Initialize_conversation(Using_character_name):
         path = os.path.join(AIVT_Character_path, Using_character_name, filename)
         try:
             with open(path, 'r', encoding='utf-8') as file:
-                character_prompt = file.read()
-                conversation.append({"role": "system", "content": character_prompt})
+                character_prompt = file.read().strip()
+                if character_prompt:  # Skip empty prompt files
+                    conversation.append({"role": "system", "content": character_prompt})
+                else:
+                    print(f"Skipping empty prompt: {path}")
         except FileNotFoundError:
-            conversation.append({"role": "system", "content": ""})
             print(f"File not found: {path}")
 
     conversation.append({"role": "system", "content": GUI_LLM_parameters["wdn_prompt"]})
 
     AIVT_Using_character_previous = Using_character_name
+    
+    # Load past history from file
+    Load_History_to_Conversation(Using_character_name)
 
     print(f"!!! Initialization Done !!!")
+
+def Load_History_to_Conversation(character_name):
+    global conversation
+    try:
+        history_path = f"Text_files/ConversationHistory/{datetime.datetime.now().strftime('%Y-%m-%d')}.txt"
+        if not os.path.exists(history_path):
+            return
+
+        with open(history_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+
+        # Split by separator
+        blocks = content.split("------------------------------")
+        # Get last 50 blocks
+        last_blocks = blocks[-51:-1] if len(blocks) > 50 else blocks[:-1]
+
+        for block in last_blocks:
+            lines = [l.strip() for l in block.strip().splitlines() if l.strip()]
+            if len(lines) < 3: continue
+            
+            # Line 0 is timestamp, Line 1 is Name, Line 2+ is content
+            timestamp = lines[0]
+            speaker = lines[1].replace(":", "").strip()
+            msg_content = " ".join(lines[2:])
+            
+            # Determine role
+            if speaker == character_name:
+                role = "assistant"
+            else:
+                role = "user"
+            
+            # Extract time portion only (HH:MM:SS) for consistent format
+            time_match = re.search(r'(\d{2}:\d{2}:\d{2})', timestamp)
+            time_str = time_match.group(1) if time_match else timestamp
+            
+            # Store without speaker name prefix (role already indicates who said it)
+            conversation.append({"role": role, "content": f"[{time_str}] {msg_content}"})
+            
+        print(f"!!! Loaded {len(last_blocks)} past interactions for {character_name} !!!")
+    except Exception as e:
+        print(f"Error loading history: {e}")
 
 def conversation_character_prompt_change(Using_character_name, command=None):
     global conversation, AIVT_Character_path, AIVT_Character_prompt_filenames, AIVT_Using_character_previous
@@ -176,6 +223,12 @@ def OpenAI_Whisper_thread(audio_frames, command=None):
         Mic_Record.save_audio2wav(audio_frames, user_mic_audio_path, )
 
         aprint("* Whisper Transcribing... *")
+        GUI_Conversation_History_list.append({
+            "chat_role": "system",
+            "chat_now": "",
+            "ai_name": "System",
+            "ai_ans": "Whisper 語音轉文字處理中..."
+        })
 
         if OpenAI_Whisper_Inference == "Local":
             ans_OpenAI_Whisper_text = whisper.run_with_timeout_OpenAI_Whisper(
@@ -204,6 +257,17 @@ def OpenAI_Whisper_thread(audio_frames, command=None):
             ans_requst = {"role": role, "content": ans_OpenAI_Whisper_text}
             OpenAI_Whisper_LLM_wait_list.append(ans_requst)
 
+        else:
+            GUI_Conversation_History_list.append({
+                "chat_role": "system",
+                "chat_now": "",
+                "ai_name": "System",
+                "ai_ans": "無法識別語音，請大聲一點或確認收音狀況。"
+            })
+            if getattr(GUI_Auto_Mic_Mode, "__class__", bool) and GUI_Auto_Mic_Mode:
+                # Restart mic immediately because no LLM conversation is taking place
+                GUI_Conversation_History_list.append({"chat_role": "system", "chat_now": "", "ai_name": "System", "ai_ans": "command:start_mic"})
+
 
 
 
@@ -225,20 +289,25 @@ lock_LLM_Request = threading.Lock()
 
 def LLM_Request_thread(ans_request, llm_ans=None):
     global GUI_LLM_parameters, conversation
-
+    print(f"\n[DEBUG] LLM_Request_thread started. Role: {ans_request['role']}")
     with lock_LLM_Request:
         role = ans_request["role"]
         conversation_now = ans_request["content"]
+        print(f"[DEBUG] Acquired LLM Lock. Processing content: {conversation_now[:30]}...")
 
         if role == "assistant":
             llm_ans.put("")
             return
 
 
+        current_time_str = datetime.datetime.now().strftime("%H:%M:%S")
+
         if GUI_LLM_parameters["instruction_enhance"]:
             conversation_instruction = GUI_LLM_parameters["instruction_enhance_prompt"]
+            # Inject current time into system instructions
+            conversation_instruction += f"\n目前的系統時間是 {current_time_str}。你可以根據對話的時間戳記來判斷時間流逝。"
         else:
-            conversation_instruction = ""
+            conversation_instruction = f"目前的系統時間是 {current_time_str}。"
 
 
         llm_model_name = ""
@@ -250,6 +319,9 @@ def LLM_Request_thread(ans_request, llm_ans=None):
         elif GUI_LLM_parameters["model"] == "GPT":
             llm_model_name = gpt_api.gpt_parameters["model"]
             token_max = gpt_api.gpt_parameters["max_input_tokens"]
+        elif GUI_LLM_parameters["model"] == "Ollama":
+            llm_model_name = ollama_api.ollama_parameters["model"]
+            token_max = 8192 # Default for many local models, adjustable
         else:
             llm_model_name  = gimini_api.gemini_parameters["model"]
             token_max = gimini_api.gemini_parameters["max_input_tokens"]
@@ -266,7 +338,10 @@ def LLM_Request_thread(ans_request, llm_ans=None):
         chat_role = ["user", "user_mic", "youtube_chat", "twitch_chat"]
 
         if role in chat_role:
-            conversation.append({"role": "user", "content": conversation_now})
+            # Store with timestamp for memory/history
+            timestamped_content = f"[{current_time_str}] {conversation_now}"
+            conversation.append({"role": "user", "content": timestamped_content})
+            # Send clean text to LLM (no timestamp in content)
             conversation_for_llm.append({"role": "user", "content": conversation_now})
 
 
@@ -311,6 +386,18 @@ def LLM_Request_thread(ans_request, llm_ans=None):
                 retry=gpt_api.gpt_parameters["retry"],
                 )
 
+        elif GUI_LLM_parameters["model"] == "Ollama":
+            llm_result = ollama_api.run_with_timeout_Ollama_API(
+                conversation_for_llm,
+                conversation_now,
+                model_name=ollama_api.ollama_parameters["model"],
+                base_url=ollama_api.ollama_parameters["base_url"],
+                max_output_tokens=ollama_api.ollama_parameters["max_output_tokens"],
+                temperature=ollama_api.ollama_parameters["temperature"],
+                timeout=ollama_api.ollama_parameters["timeout"],
+                retry=ollama_api.ollama_parameters["retry"],
+                )
+
         else:
             llm_ans.put("")
             return
@@ -327,7 +414,9 @@ def LLM_Request_thread(ans_request, llm_ans=None):
 
 
         elif llm_result != "":
-            conversation.append({"role": "assistant", "content": f"{llm_result}"})
+            # Store with timestamp for memory, but return clean text
+            timestamped_ans = f"[{current_time_str}] {llm_result}"
+            conversation.append({"role": "assistant", "content": timestamped_ans})
             llm_ans.put(llm_result)
             return
 
@@ -345,6 +434,7 @@ def LLM_Request_thread(ans_request, llm_ans=None):
 GUI_TTS_Using = ""
 GUI_Setting_read_chat_now = False
 GUI_VTSP_wait_until_hotkeys_complete = False
+GUI_Auto_Mic_Mode = False
 
 GUI_AIVT_Speaking_wait_list = []
 GUI_Conversation_History_list = []
@@ -441,6 +531,11 @@ def subtitles_speak_thread(chat_role, chat_now, ai_ans, ai_name):
 
     speaking_continue_count -= 1
 
+    if speaking_continue_count == 0 and getattr(GUI_Auto_Mic_Mode, "__class__", bool) and GUI_Auto_Mic_Mode:
+        import time
+        time.sleep(1.5)  # Wait for room echo/DAC buffers to clear before opening mic
+        GUI_Conversation_History_list.append({"chat_role": "system", "chat_now": "", "ai_name": "System", "ai_ans": "command:start_mic"})
+
 
     with lock_remove_file:
         def manage_files_by_count(file_path, file_max):
@@ -473,6 +568,13 @@ def sa_request_thread(text, sa_ans):
 
 def tts_request_thread(tts_text, tts_path):
     global GUI_TTS_Using
+
+    GUI_Conversation_History_list.append({
+        "chat_role": "system",
+        "chat_now": "",
+        "ai_name": "System",
+        "ai_ans": "AI 文字轉語音 (TTS) 處理中..."
+    })
 
     with lock_tts_request:
         def generate_unique_filename(file_path, file_name, file_extension):

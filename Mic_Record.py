@@ -2,6 +2,7 @@ import time
 import threading
 import pyaudio
 import wave
+import audioop
 
 import keyboard
 
@@ -38,133 +39,158 @@ User_Mic_parameters = {
     "rate": 24000,
     "chunk": 1024,
     "minimum_duration": 1,
+    "energy_threshold": 500,
+    "silence_duration_threshold": 2.0,
 }
 
 Audio_frames_out = []
 Mic_hotkey_pressed = False
 
-
+from shared_pyaudio import get_pyaudio
 
 def MC_Record():
     global user_mic_status, User_Mic_parameters, Mic_hotkey_pressed, Audio_frames_out
 
+    # IMPORTANT: Clear leftover audio frames from previous session to prevent instant Whisper triggers
+    Audio_frames_out.clear()
+
     input_device_index = Get_available_input_devices_ID(User_Mic_parameters["input_device_name"])
     CHUNK = User_Mic_parameters["chunk"]
 
-    p = pyaudio.PyAudio()
-    audio_stream = p.open(
-            input=True,
-            input_device_index=input_device_index,
-            channels=User_Mic_parameters["channels"],
-            format=User_Mic_parameters["format"],
-            rate=User_Mic_parameters["rate"],
-            frames_per_buffer=CHUNK,
-        )
+    p = get_pyaudio()
+    try:
+        audio_stream = p.open(
+                input=True,
+                input_device_index=input_device_index,
+                channels=User_Mic_parameters["channels"],
+                format=User_Mic_parameters["format"],
+                rate=User_Mic_parameters["rate"],
+                frames_per_buffer=CHUNK,
+            )
+    except OSError as e:
+        aprint(f"!!! Error opening audio stream: {e} !!!")
+        print(f"[DEBUG] OSError details: {e}")
+        if e.errno == -9996:
+            aprint("!!! No default input/output device found or access denied (macOS). !!!")
+            aprint("!!! Please ensure the terminal/app has Microphone permissions or select a device manually in 'Setting' tab. !!!")
+        user_mic_status["mic_on"] = False
+        user_mic_status["mic_record_running"] = False
+        return
+
+    import platform
+    if platform.system() == "Darwin":
+        user_mic_status["mic_hotkeys_using"] = False
 
     Mic_hotkey_pressed = False
+    
     dmhp = threading.Thread(target=Detect_Mic_hotkey_pressed)
     dmhp.start()
 
     while user_mic_status["mic_on"]:
-        if Mic_hotkey_pressed:
+        should_record = Mic_hotkey_pressed or (not user_mic_status.get("mic_hotkeys_using", False))
+        if should_record:
             frames = []
             start_time = time.time()
             current_time = start_time
-
-            while Mic_hotkey_pressed:
-                data = audio_stream.read(CHUNK)
+            last_spoken_time = start_time
+            has_spoken = False
+            
+            while user_mic_status["mic_on"] and (Mic_hotkey_pressed or (not user_mic_status.get("mic_hotkeys_using", False))):
+                data = audio_stream.read(CHUNK, exception_on_overflow=False)
                 frames.append(data)
                 current_time = time.time()
+
+                # VAD calculation
+                rms = audioop.rms(data, p.get_sample_size(User_Mic_parameters["format"]))
+                if rms > User_Mic_parameters["energy_threshold"]:
+                    last_spoken_time = current_time
+                    has_spoken = True
+                
+                # Check silence duration
+                if has_spoken and (current_time - last_spoken_time) > User_Mic_parameters["silence_duration_threshold"]:
+                    user_mic_status["mic_on"] = False  # Immediately break loop directly
+                    aivtui.GUI_Conversation_History_list.append({"chat_role": "system", "chat_now": "", "ai_name": "System", "ai_ans": "command:force_stop_mic"})
+                    break
 
             if current_time - start_time >= User_Mic_parameters["minimum_duration"]:
                 Audio_frames_out.append(frames)
                 aprint("* Record output *")
-
+                print(f"[DEBUG] Recorded frames length: {len(frames)}")
             else:
                 aprint("*** Mic Record Cancel ***")
-
+                print(f"[DEBUG] Record canceled, duration too short: {current_time - start_time}")
+            
+            print("[DEBUG] Inner while loop executed properly.")
+            
+        print("[DEBUG] Outer loop tick")
         time.sleep(0.1)
 
+    print("[DEBUG] Exited outer loop. Setting mic_record_running to False.")
     user_mic_status["mic_record_running"] = False
+    
+    try:
+        if audio_stream.is_active():
+            audio_stream.stop_stream()
+        audio_stream.close()
+        print("[DEBUG] audio_stream closed successfully.")
+    except Exception as e:
+        print(f"[DEBUG] Error closing audio_stream: {e}")
 
-    audio_stream.stop_stream()
-    audio_stream.close()
-    p.terminate()
-    dmhp.join()
     print("* User Mic OFF *")
 
 
 def Detect_Mic_hotkey_pressed():
     global user_mic_status, Mic_hotkey_pressed
-    def on_key_event(e):
-        global Mic_hotkey_pressed
-        if e.event_type == keyboard.KEY_DOWN and user_mic_status["mic_hotkeys_using"]:
-            if user_mic_status["mic_hotkey_1_using"] and user_mic_status["mic_hotkey_2_using"]:
-                hotkeys = f"{user_mic_status['mic_hotkey_1']}+{user_mic_status['mic_hotkey_2']}"
-
-            elif user_mic_status["mic_hotkey_1_using"]:
-                hotkeys = user_mic_status['mic_hotkey_1']
-
-            else:
-                hotkeys = user_mic_status['mic_hotkey_2']
- 
-            if not Mic_hotkey_pressed and keyboard.is_pressed(hotkeys):
-                aprint('** Start Mic Recording **')
-                Mic_hotkey_pressed = True
-
-        elif e.event_type == keyboard.KEY_UP and user_mic_status["mic_hotkeys_using"]:
-            if Mic_hotkey_pressed and ((e.name == user_mic_status["mic_hotkey_1"] and user_mic_status["mic_hotkey_1_using"]) or (e.name == user_mic_status["mic_hotkey_2"] and user_mic_status["mic_hotkey_2_using"])):
-                aprint('** End Mic Recording **')
-                Mic_hotkey_pressed = False
-
-
-    keyboard.hook(on_key_event)
-
-    print("* User Mic ON *")
+    # Hotkeys disabled on macOS without sudo
+    print("* User Mic ON * (Hotkeys disabled on macOS without sudo)")
     user_mic_status["mic_record_running"] = True
-
     while user_mic_status["mic_on"]:
         time.sleep(0.1)
-
     Mic_hotkey_pressed = False
-
-    keyboard.unhook_all()
+    import platform
+    if platform.system() != "Darwin":
+        try:
+            keyboard.unhook_all()
+        except:
+            pass
 
 
 def MC_Output_checker():
     global user_mic_status, Audio_frames_out
-
+    print("[DEBUG] MC_Output_checker started.")
     user_mic_status["mic_checker_running"] = True
-
     while user_mic_status["mic_on"]:
         if Audio_frames_out:
             aprint("* output check *")
+            print("[DEBUG] Popping frames and sending to thread.")
             mco = threading.Thread(target=aivtui.OpenAI_Whisper_thread, args=(Audio_frames_out.pop(0), ))
             mco.start()
-
         time.sleep(0.1)
-
-    # Avoid mic off when MC_Record is still processing
+    
+    print("[DEBUG] checker waiting for mic_record_running to stop.")
     while user_mic_status["mic_record_running"]:
         time.sleep(0.1)
-
+    
+    print("[DEBUG] checker finalizing remaining frames.")
     if Audio_frames_out:
         aprint("* output check *")
+        print("[DEBUG] Processing last frames...")
         mco = threading.Thread(target=aivtui.OpenAI_Whisper_thread, args=(Audio_frames_out.pop(0), ))
         mco.start()
         mco.join()
-
+        print("[DEBUG] Last frames processing joined.")
+        
     user_mic_status["mic_checker_running"] = False
+    print("[DEBUG] MC_Output_checker ended.")
 
 
-
-
-
+import os
 def save_audio2wav(audio_frames, save_path):
     global User_Mic_parameters
-
-    p = pyaudio.PyAudio()
-
+    
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
+    
+    p = get_pyaudio()
     wf = wave.open(save_path, 'wb')
     wf.setnchannels(User_Mic_parameters["channels"])
     wf.setsampwidth(p.get_sample_size(User_Mic_parameters["format"]))
@@ -173,72 +199,49 @@ def save_audio2wav(audio_frames, save_path):
     wf.close()
 
 
-
-
-
 def Get_key_press():
     print("User Mic Hotkey Detecting(Press ESC to cancel)...")
     event = keyboard.read_event()
-
     if event.event_type == keyboard.KEY_DOWN:
         key_name = event.name
         if not key_name == "esc":
             print(f"Detected Key: {key_name}")
-
         else:
             print("User Mic Hotkey Cancel")
-
         return key_name
 
 
-
-
-
 def Available_Input_Device():
-    p = pyaudio.PyAudio()
+    p = get_pyaudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')
-
     for i in range(0, numdevices):
         if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             print(f"Input Device id {i} - {p.get_device_info_by_host_api_device_index(0, i).get('name')}")
 
-    p.terminate()
-
 
 def Get_available_input_devices_List():
-    p = pyaudio.PyAudio()
+    p = get_pyaudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')
     input_devices_list = []
     for i in range(0, numdevices):
         if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             input_devices_list.append(p.get_device_info_by_host_api_device_index(0, i).get('name'))
-
-    p.terminate()
     return input_devices_list
 
 
 def Get_available_input_devices_ID(devices_name):
-    p = pyaudio.PyAudio()
+    p = get_pyaudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')
-
-    # find input device id by device name
     for i in range(0, numdevices):
         if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
             if devices_name == p.get_device_info_by_host_api_device_index(0, i).get('name'):
-                p.terminate()
                 return i
-
-    # if the name is not in input device list
-    #return default system audio input device
     for i in range(0, numdevices):
         if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            p.terminate()
             return i
-
-    p.terminate()
     return None
 
 

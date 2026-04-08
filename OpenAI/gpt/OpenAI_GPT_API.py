@@ -125,6 +125,11 @@ def OpenAI_GPT_API_thread(
         retry = 3,
         ):
 
+    if not AIVT_Config.openai_api_key:
+        print("!!! OpenAI API Key is empty. Please check AIVT_Config.py !!!")
+        ans.put("API Key Missing")
+        return
+
     openai.api_key = AIVT_Config.openai_api_key
 
     reT = 0

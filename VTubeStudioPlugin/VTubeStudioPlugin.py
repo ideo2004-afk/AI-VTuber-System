@@ -9,6 +9,8 @@ import pyvts
 
 from My_Tools.AIVT_print import aprint
 
+aivt_vtsp = None
+
 
 
 
@@ -110,7 +112,7 @@ async def async_AIVT_VTSP_get_token_and_authenticated():
     await aivt_vtsp.request_authenticate_token()
     await aivt_vtsp.write_token()
     await aivt_vtsp.request_authenticate()
-    await aivt_vtsp.close()
+    # DO NOT close here, keep it alive for hotkeys
 
 async def async_AIVT_VTSP_authenticated():
     global aivt_vtsp
@@ -118,7 +120,7 @@ async def async_AIVT_VTSP_authenticated():
     await aivt_vtsp.connect()
     await aivt_vtsp.read_token()
     await aivt_vtsp.request_authenticate()
-    await aivt_vtsp.close()
+    # DO NOT close here, keep it alive for hotkeys
 
 
 
@@ -138,18 +140,37 @@ def VTSP_Hotkey_Names_Trigger(hotkey_names_list=[], command=None):
 async def async_VTSP_Hotkey_Names_Trigger(hotkey_names, command=None):
     global aivt_vtsp
 
-    await aivt_vtsp.connect()
-    await aivt_vtsp.request_authenticate()
+    try:
+        # Check if already authenticated/connected, if not, try once
+        if not AIVT_VTSP_Status["authenticated"]:
+             await aivt_vtsp.connect()
+             await aivt_vtsp.request_authenticate()
+        
+        for hotkey_name in hotkey_names:
+            try:
+                send_hotkey_request = aivt_vtsp.vts_request.requestTriggerHotKey(hotkey_name)
+                await aivt_vtsp.request(send_hotkey_request)
+            except Exception as e:
+                aprint(f"!!! Trigger Hotkey *{hotkey_name}* Fail: {e} !!!")
+                # Try to reconnect once if a single request fails (might be socket dropped)
+                try:
+                    await aivt_vtsp.connect()
+                    await aivt_vtsp.request_authenticate()
+                    await aivt_vtsp.request(send_hotkey_request)
+                except:
+                    pass
+    except Exception as e:
+        aprint(f"!!! VTSP Connection Error during Trigger: {e} !!!")
+        AIVT_VTSP_Status["authenticated"] = False
 
-    for hotkey_name in hotkey_names:
-        try:
-            send_hotkey_request = aivt_vtsp.vts_request.requestTriggerHotKey(hotkey_name)
-            await aivt_vtsp.request(send_hotkey_request)
-
-        except Exception as e:
-            aprint(f"!!! Trigger Hotkey *{hotkey_name}* Fail !!!")
-
-    await aivt_vtsp.close()
+def AIVT_VTSP_disconnect():
+    global aivt_vtsp
+    try:
+        asyncio.run(aivt_vtsp.close())
+        print("!!! VTSP API Disconnected Properly !!!")
+    except:
+        pass
+    AIVT_VTSP_Status["authenticated"] = False
 
 
 

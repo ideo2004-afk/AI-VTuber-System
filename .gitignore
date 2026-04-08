@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environment
+venv/
+ENV/
+
+# System-specific
+.DS_Store
+Thumbs.db
+
+# AI-VTuber-System specific
+VTubeStudioPlugin/VTSP_authentication_token.txt
+*token*
+*auth*
+*.txt
+!requirements.txt
+!requirements_mac.txt
+!AIVT_Character/**/*.txt
+!Sentiment_Analysis/**/*.txt
+
+# Audio cache
+Audio/
+Ollama/
+AIVT_Config.py

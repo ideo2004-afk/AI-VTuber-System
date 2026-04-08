@@ -145,10 +145,8 @@ model = None
 
 
 def get_available_model_names_list():
-    pattern = os.path.join("OpenAI/whisper/models/", "*.pt")
-    pt_files = glob.glob(pattern)
-    model_names_list = [os.path.splitext(os.path.basename(file))[0] for file in pt_files]
-    return model_names_list
+    # Return the standard Whisper models so they are selectable in the UI
+    return ['tiny', 'base', 'small', 'medium', 'large', 'turbo']
 
 
 
@@ -166,8 +164,14 @@ def load_model(model_name="base"):
                 torch.cuda.empty_cache()
 
         start_time = time.time()
-
-        model = whisper.load_model(name=f"OpenAI/whisper/models/{model_name}.pt", )
+        device = "cpu"
+        print(f"Preparing to load Whisper model '{model_name}' on {device}...")
+        try:
+            model = whisper.load_model(name=model_name, device=device)
+            print("Whisper model loaded successfully!")
+        except Exception as e:
+            print(f"Exception during whisper.load_model: {e}")
+            raise e
 
         end_time = time.time()
 

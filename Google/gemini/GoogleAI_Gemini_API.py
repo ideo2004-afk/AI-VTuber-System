@@ -164,6 +164,11 @@ def GoogleAI_Gemini_API_thread(
         }
     ]
 
+    if not AIVT_Config.google_api_key:
+        print("!!! Gemini API Key is empty. Please check AIVT_Config.py !!!")
+        ans.put("API Key Missing")
+        return
+
     client = genai.Client(
         api_key=AIVT_Config.google_api_key,
     )
@@ -174,9 +179,7 @@ def GoogleAI_Gemini_API_thread(
         thinking_config=types.ThinkingConfig(thinking_budget=0), # Disables thinking
         max_output_tokens=max_output_tokens,
         temperature=temperature,
-        # top_p=0.95,
-        # top_k=20,
-        # candidate_count=1,
+        tools=[types.Tool(google_search=types.GoogleSearch())],
     )
 
     reT = 0
