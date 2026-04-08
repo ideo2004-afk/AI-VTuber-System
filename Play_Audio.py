@@ -77,6 +77,10 @@ def PlayAudio(audio_path, output_device_name, command=None):
         stream.write(data)
         data = wf.readframes(CHUNK)
 
+    # Flush hardware buffer with silence frames to prevent audio cut-off
+    silence = b'\x00' * CHUNK * audio.sample_width * audio.channels
+    stream.write(silence)
+
     stream.stop_stream()
     stream.close()
 

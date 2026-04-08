@@ -21,6 +21,7 @@ import json
 import My_Tools.Token_Calculator as tokenC
 import TextToSpeech.edgeTTS as edgeTTS
 import TextToSpeech.OpenAITTS as openaiTTS
+import TextToSpeech.F5TTS as f5tts_module
 import VTubeStudioPlugin.VTubeStudioPlugin as vtsp
 import OBS_websocket.OBS_websocket as obsws
 import OpenAI.whisper.OpenAI_Whisper as whisper
@@ -65,6 +66,7 @@ def load_config_json(config_path="config.json"):
         "model": config["llm"]["active"],
         "instruction_enhance": config["llm"]["instruction_enhance"],
         "instruction_enhance_i": config["llm"]["instruction_enhance_i"],
+        "max_history_rounds": config["llm"].get("max_history_rounds", 10),
         "wdn_prompt": "" # Usually comes from "Doing Now" setting
     })
     
@@ -85,6 +87,9 @@ def load_config_json(config_path="config.json"):
     
     import TextToSpeech.OpenAITTS as openaiTTS
     openaiTTS.openaitts_parameters.update(config["tts"]["openai"])
+
+    import TextToSpeech.F5TTS as f5tts_module
+    f5tts_module.f5tts_parameters.update(config["tts"]["f5tts"])
     
     # Whisper Settings
     import OpenAI.whisper.OpenAI_Whisper as whisper
@@ -400,6 +405,15 @@ def LLM_Request_thread(ans_request, llm_ans=None):
 
         conversation_for_llm = copy.deepcopy(conversation)
 
+        # Trim history to max_history_rounds (keep system messages, limit user/assistant pairs)
+        max_rounds = GUI_LLM_parameters.get("max_history_rounds", 10)
+        sys_msgs  = [m for m in conversation_for_llm if m["role"] == "system"]
+        hist_msgs = [m for m in conversation_for_llm if m["role"] != "system"]
+        max_msgs  = max_rounds * 2  # each round = 1 user + 1 assistant
+        if len(hist_msgs) > max_msgs:
+            hist_msgs = hist_msgs[-max_msgs:]
+        conversation_for_llm = sys_msgs + hist_msgs
+
         iea = False
         iei = GUI_LLM_parameters["instruction_enhance_i"]*2
         if len(conversation) >= 6+iei:
@@ -677,6 +691,12 @@ def tts_request_thread(tts_text, tts_path):
                 counter += 1
             
             return full_path
+
+        if GUI_TTS_Using == "F5TTS":
+            output_device = Play_Audio.play_audio_parameters.get("ai_voice_output_device_name", "")
+            f5tts_module.f5tts_streaming(tts_text, output_device=output_device)
+            tts_path.put(f5tts_module.STREAMED_SENTINEL)
+            return
 
         file_path = "Audio/tts"
         file_name = f"{GUI_TTS_Using}"
@@ -1149,7 +1169,10 @@ def subtitles_speak(
 
 
 
-    ai_ans_read = threading.Thread(target=speaking, args=(ai_ans_tts_path, ))
+    # F5TTS streaming already played the audio — skip playback here
+    f5tts_already_played = (ai_ans_tts_path == f5tts_module.STREAMED_SENTINEL)
+    if not f5tts_already_played:
+        ai_ans_read = threading.Thread(target=speaking, args=(ai_ans_tts_path, ))
 
 
 
@@ -1171,8 +1194,9 @@ def subtitles_speak(
 
 
 
-    ai_ans_read.start()
-    ai_ans_read.join()
+    if not f5tts_already_played:
+        ai_ans_read.start()
+        ai_ans_read.join()
 
 
 

@@ -41,5 +41,9 @@ VTubeStudioPlugin/VTSP_authentication_token.txt
 
 # Audio cache
 Audio/
-Ollama/
+
+# Local model files (large binaries)
+models/
+
+# Sensitive / generated config
 AIVT_Config.py

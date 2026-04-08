@@ -55,6 +55,13 @@ def MC_Record():
     Audio_frames_out.clear()
 
     input_device_index = Get_available_input_devices_ID(User_Mic_parameters["input_device_name"])
+
+    if input_device_index is None:
+        aprint("!!! No real microphone found (virtual devices excluded). Mic disabled. !!!")
+        user_mic_status["mic_on"] = False
+        user_mic_status["mic_record_running"] = False
+        return
+
     CHUNK = User_Mic_parameters["chunk"]
 
     p = get_pyaudio()
@@ -237,19 +244,38 @@ def Get_available_input_devices_List():
     return input_devices_list
 
 
+# Virtual/loopback devices that should never be used as mic input.
+# Matched case-insensitively as substrings of the device name.
+VIRTUAL_MIC_BLACKLIST = ["blackhole", "soundflower", "loopback", "virtual"]
+
+
+def _is_virtual_device(name: str) -> bool:
+    name_lower = name.lower()
+    return any(kw in name_lower for kw in VIRTUAL_MIC_BLACKLIST)
+
+
 def Get_available_input_devices_ID(devices_name):
-    if not devices_name or devices_name.strip() == "":
-        return None # PyAudio uses the system default in this case
     p = get_pyaudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')
+
+    # If a specific device name is given, try to match it first.
+    if devices_name and devices_name.strip():
+        for i in range(0, numdevices):
+            if p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels', 0) > 0:
+                if devices_name == p.get_device_info_by_host_api_device_index(0, i).get('name'):
+                    return i
+
+    # Fallback: return the first real (non-virtual) input device.
     for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            if devices_name == p.get_device_info_by_host_api_device_index(0, i).get('name'):
+        dev = p.get_device_info_by_host_api_device_index(0, i)
+        if dev.get('maxInputChannels', 0) > 0:
+            name = dev.get('name', '')
+            if not _is_virtual_device(name):
+                aprint(f"* Auto-selected mic: {name} *")
                 return i
-    for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxInputChannels')) > 0:
-            return i
+
+    # No real mic found — return None to signal that mic should not start.
     return None
 
 

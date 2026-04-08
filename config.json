@@ -9,9 +9,10 @@
         "mic_device": ""
     },
     "llm": {
-        "active": "Gemini",
+        "active": "Ollama",
         "instruction_enhance": true,
-        "instruction_enhance_i": 1,
+        "instruction_enhance_i": 0,
+        "max_history_rounds": 10,
         "gemini": {
             "model": "gemini-2.5-flash",
             "temperature": 0.9,
@@ -29,7 +30,7 @@
             "retry": 3
         },
         "ollama": {
-            "model": "gemma3:12b-it-qat",
+            "model": "gemma4",
             "base_url": "http://localhost:11434",
             "temperature": 0.8,
             "max_output_tokens": 512,
@@ -38,7 +39,14 @@
         }
     },
     "tts": {
-        "active": "EdgeTTS",
+        "active": "F5TTS",
+        "f5tts": {
+            "ref_audio": "TextToSpeech/reference/nahida_ref.wav",
+            "ref_text": "天气真好呀,暖洋洋的我们的身边马上也要热闹起来了.",
+            "nfe_step": 16,
+            "speed": 1.0,
+            "output_dir": "Audio/tts"
+        },
         "edge": {
             "voice": "zh-TW-HsiaoChenNeural",
             "pitch": "+20Hz",

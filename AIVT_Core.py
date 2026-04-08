@@ -8,10 +8,24 @@ import json
 # Add current directory to path for imports
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 
+import questionary
+from questionary import Style as QStyle
+
 import AI_Vtuber_UI as aivtui
 import Mic_Record as mcrc
 import VTubeStudioPlugin.VTubeStudioPlugin as vtsp
 from My_Tools.AIVT_print import aprint
+
+_cli_style = QStyle([
+    ("qmark",        "fg:#7ecfff bold"),
+    ("question",     "bold"),
+    ("answer",       "fg:#7ecfff bold"),
+    ("pointer",      "fg:#7ecfff bold"),
+    ("highlighted",  "fg:#7ecfff bold"),
+    ("selected",     "fg:#7ecfff"),
+    ("separator",    "fg:#444444"),
+    ("instruction",  "fg:#888888"),
+])
 
 class AIVT_Core:
     def __init__(self, config_path="config.json"):
@@ -35,12 +49,22 @@ class AIVT_Core:
         # Load character and conversation
         aivtui.Load_AIVT_Character()
         aivtui.Initialize_conversation(self.config["user"]["character"])
+
+        # Load instruction_enhance_prompt from character file (GUI mode does this on startup)
+        aivtui.GUI_LLM_parameters["instruction_enhance_prompt"] = aivtui.get_instruction_enhance_prompt(
+            self.config["user"]["character"]
+        )
         
         # 4. Connect to VTube Studio (optional)
         self.vts_thread = None
         if self.config["vtube_studio"]["enabled"]:
-            vts_choice = input("\n連結 VTube Studio？[y/N]: ").strip().lower()
-            if vts_choice == "y":
+            connect_vts = questionary.select(
+                "是否連結 VTube Studio？",
+                choices=["否", "是"],
+                default="否",
+                style=_cli_style,
+            ).ask() == "是"
+            if connect_vts:
                 aprint("* Connecting to VTube Studio... *")
                 self.vts_thread = threading.Thread(target=self.init_vtsp, daemon=True)
                 self.vts_thread.start()
@@ -48,26 +72,27 @@ class AIVT_Core:
                 aprint("* 跳過 VTube Studio 連線 *")
 
     def select_llm_mode(self):
-        print("\n" + "="*40)
-        print("  🚀 請選擇本次啟用的 LLM 模式：")
-        print(f"  [1] Google Gemini ({self.config['llm']['gemini']['model']})")
-        print(f"  [2] OpenAI GPT ({self.config['llm']['gpt']['model']})")
-        print(f"  [3] Ollama Local ({self.config['llm']['ollama']['model']})")
-        print(f"  [Enter] 保持預設 ({self.config['llm']['active']})")
-        print("="*40)
-        
-        # We use a simple input for now. 
-        # In the future we can add a timeout if needed, but for CLI interaction this is standard.
-        choice = input("請輸入選項 [1-3]: ").strip()
-        
-        selected = self.config['llm']['active']
-        if choice == "1":
-            selected = "Gemini"
-        elif choice == "2":
-            selected = "GPT"
-        elif choice == "3":
-            selected = "Ollama"
-            
+        default = self.config['llm']['active']
+        choices = [
+            f"Google Gemini  ({self.config['llm']['gemini']['model']})",
+            f"OpenAI GPT     ({self.config['llm']['gpt']['model']})",
+            f"Ollama Local   ({self.config['llm']['ollama']['model']})",
+        ]
+        label_to_key = {
+            choices[0]: "Gemini",
+            choices[1]: "GPT",
+            choices[2]: "Ollama",
+        }
+        default_choice = next((c for c in choices if label_to_key[c] == default), choices[0])
+
+        selected_label = questionary.select(
+            "請選擇 LLM 模式：",
+            choices=choices,
+            default=default_choice,
+            style=_cli_style,
+        ).ask()
+
+        selected = label_to_key.get(selected_label, default)
         aivtui.GUI_LLM_parameters["model"] = selected
         aprint(f"➤ 已選擇模式: {selected}")
 
