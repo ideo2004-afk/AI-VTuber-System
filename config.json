@@ -1,0 +1,69 @@
+{
+    "user": {
+        "name": "樂樂",
+        "character": "Nahida"
+    },
+    "audio": {
+        "output_device": "",
+        "mic_device": ""
+    },
+    "llm": {
+        "active": "Gemini",
+        "instruction_enhance": true,
+        "instruction_enhance_i": 1,
+        "gemini": {
+            "model": "gemini-2.5-flash",
+            "temperature": 0.9,
+            "max_input_tokens": 8192,
+            "max_output_tokens": 512,
+            "timeout": 15,
+            "retry": 3
+        },
+        "gpt": {
+            "model": "gpt-4o",
+            "temperature": 1.0,
+            "max_input_tokens": 4096,
+            "max_output_tokens": 256,
+            "timeout": 15,
+            "retry": 3
+        },
+        "ollama": {
+            "model": "gemma3:12b-it-qat",
+            "base_url": "http://localhost:11434",
+            "temperature": 0.8,
+            "max_output_tokens": 512,
+            "timeout": 120,
+            "retry": 3
+        }
+    },
+    "tts": {
+        "active": "EdgeTTS",
+        "edge": {
+            "voice": "zh-TW-HsiaoChenNeural",
+            "pitch": "+20Hz",
+            "rate": "+14%",
+            "volume": "+0%"
+        },
+        "openai": {
+            "model": "tts-1",
+            "voice": "shimmer",
+            "speed": 1.0
+        }
+    },
+    "whisper": {
+        "inference": "Local",
+        "model_name": "small",
+        "language": "zh",
+        "max_tokens": 192,
+        "temperature": 0.2,
+        "timeout": 10
+    },
+    "vtube_studio": {
+        "enabled": true,
+        "host": "127.0.0.1",
+        "port": 8001,
+        "sentiment_analysis": true,
+        "trigger_first": true,
+        "wait_until_hotkeys_complete": true
+    }
+}

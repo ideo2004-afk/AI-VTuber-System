@@ -109,34 +109,35 @@ def MC_Record():
                 # Check silence duration
                 if has_spoken and (current_time - last_spoken_time) > User_Mic_parameters["silence_duration_threshold"]:
                     user_mic_status["mic_on"] = False  # Immediately break loop directly
+                    aprint("* Voice Detected, processing... *")
                     aivtui.GUI_Conversation_History_list.append({"chat_role": "system", "chat_now": "", "ai_name": "System", "ai_ans": "command:force_stop_mic"})
                     break
 
             if current_time - start_time >= User_Mic_parameters["minimum_duration"]:
                 Audio_frames_out.append(frames)
-                aprint("* Record output *")
-                print(f"[DEBUG] Recorded frames length: {len(frames)}")
+                aprint("* Voice Detected *")
+                # print(f"[DEBUG] Recorded frames length: {len(frames)}")
             else:
                 aprint("*** Mic Record Cancel ***")
                 print(f"[DEBUG] Record canceled, duration too short: {current_time - start_time}")
             
-            print("[DEBUG] Inner while loop executed properly.")
+            # # print("[DEBUG] Inner while loop executed properly.")
             
-        print("[DEBUG] Outer loop tick")
+        # a# print("[DEBUG] Outer loop tick")
         time.sleep(0.1)
 
-    print("[DEBUG] Exited outer loop. Setting mic_record_running to False.")
+    # print("[DEBUG] Exited outer loop. Setting mic_record_running to False.")
     user_mic_status["mic_record_running"] = False
     
     try:
         if audio_stream.is_active():
             audio_stream.stop_stream()
         audio_stream.close()
-        print("[DEBUG] audio_stream closed successfully.")
+        # print("[DEBUG] audio_stream closed successfully.")
     except Exception as e:
         print(f"[DEBUG] Error closing audio_stream: {e}")
 
-    print("* User Mic OFF *")
+    aprint("* User Mic OFF *")
 
 
 def Detect_Mic_hotkey_pressed():
@@ -157,31 +158,31 @@ def Detect_Mic_hotkey_pressed():
 
 def MC_Output_checker():
     global user_mic_status, Audio_frames_out
-    print("[DEBUG] MC_Output_checker started.")
+    # print("[DEBUG] MC_Output_checker started.")
     user_mic_status["mic_checker_running"] = True
     while user_mic_status["mic_on"]:
         if Audio_frames_out:
-            aprint("* output check *")
-            print("[DEBUG] Popping frames and sending to thread.")
+            # aprint("* output check *")
+            # print("[DEBUG] Popping frames and sending to thread.")
             mco = threading.Thread(target=aivtui.OpenAI_Whisper_thread, args=(Audio_frames_out.pop(0), ))
             mco.start()
         time.sleep(0.1)
     
-    print("[DEBUG] checker waiting for mic_record_running to stop.")
+    # print("[DEBUG] checker waiting for mic_record_running to stop.")
     while user_mic_status["mic_record_running"]:
         time.sleep(0.1)
     
-    print("[DEBUG] checker finalizing remaining frames.")
+    # print("[DEBUG] checker finalizing remaining frames.")
     if Audio_frames_out:
-        aprint("* output check *")
-        print("[DEBUG] Processing last frames...")
+        # aprint("* output check *")
+        # print("[DEBUG] Processing last frames...")
         mco = threading.Thread(target=aivtui.OpenAI_Whisper_thread, args=(Audio_frames_out.pop(0), ))
         mco.start()
         mco.join()
-        print("[DEBUG] Last frames processing joined.")
+        # print("[DEBUG] Last frames processing joined.")
         
     user_mic_status["mic_checker_running"] = False
-    print("[DEBUG] MC_Output_checker ended.")
+    # # print("[DEBUG] MC_Output_checker ended.")
 
 
 import os
@@ -232,6 +233,8 @@ def Get_available_input_devices_List():
 
 
 def Get_available_input_devices_ID(devices_name):
+    if not devices_name or devices_name.strip() == "":
+        return None # PyAudio uses the system default in this case
     p = get_pyaudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')

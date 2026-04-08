@@ -8,10 +8,16 @@ import re
 import copy 
 import math
 import datetime
-sys.stdout = open(sys.stdout.fileno(), mode="w", encoding="utf8", buffering=1)
+import warnings
 
+# Suppress annoying library warnings (like Whisper FP16)
+warnings.filterwarnings("ignore", category=UserWarning)
+warnings.filterwarnings("ignore", message="FP16 is not supported on CPU")
 import Play_Audio
 import Mic_Record
+from My_Tools.AIVT_print import aprint
+import json
+
 import My_Tools.Token_Calculator as tokenC
 import TextToSpeech.edgeTTS as edgeTTS
 import TextToSpeech.OpenAITTS as openaiTTS
@@ -23,8 +29,9 @@ import OpenAI.gpt.OpenAI_GPT_API as gpt_api
 import Google.gemini.GoogleAI_Gemini_API as gimini_api
 import Ollama.Ollama_API as ollama_api
 import Sentiment_Analysis.NLP_API as sa_nlp_api
-import Live_Chat.Live_Chat as live_chat
-from My_Tools.AIVT_print import aprint
+
+AIVT_Character_path = "AIVT_Character"
+lines_fit_check = 0 # Added to fix lint error
 
 
 
@@ -37,8 +44,68 @@ from My_Tools.AIVT_print import aprint
 
 GUI_Running = False
 GUI_User_Name = "PKevin"
+# Added for CLI/GUI flexibility
+def status_callback(msg):
+    aprint(f"[AIVT-Status] {msg}")
 
-AIVT_Character_path = "AIVT_Character"
+# Initialize global parameters (will be populated by load_config_json)
+def load_config_json(config_path="config.json"):
+    global GUI_User_Name, GUI_TTS_Using, GUI_Setting_read_chat_now, GUI_VTSP_wait_until_hotkeys_complete, GUI_Auto_Mic_Mode
+    global AIVT_Using_character
+    
+    with open(config_path, 'r', encoding='utf-8') as f:
+        config = json.load(f)
+    
+    # User Settings
+    GUI_User_Name = config["user"]["name"]
+    AIVT_Using_character = config["user"]["character"]
+    
+    # LLM Settings
+    GUI_LLM_parameters.update({
+        "model": config["llm"]["active"],
+        "instruction_enhance": config["llm"]["instruction_enhance"],
+        "instruction_enhance_i": config["llm"]["instruction_enhance_i"],
+        "wdn_prompt": "" # Usually comes from "Doing Now" setting
+    })
+    
+    # Map model specific parameters
+    import Google.gemini.GoogleAI_Gemini_API as gimini_api
+    gimini_api.gemini_parameters.update(config["llm"]["gemini"])
+    
+    import OpenAI.gpt.OpenAI_GPT_API as gpt_api
+    gpt_api.gpt_parameters.update(config["llm"]["gpt"])
+    
+    import Ollama.Ollama_API as ollama_api
+    ollama_api.ollama_parameters.update(config["llm"]["ollama"])
+    
+    # TTS Settings
+    GUI_TTS_Using = config["tts"]["active"]
+    import TextToSpeech.edgeTTS as edgeTTS
+    edgeTTS.edgetts_parameters.update(config["tts"]["edge"])
+    
+    import TextToSpeech.OpenAITTS as openaiTTS
+    openaiTTS.openaitts_parameters.update(config["tts"]["openai"])
+    
+    # Whisper Settings
+    import OpenAI.whisper.OpenAI_Whisper as whisper
+    whisper.whisper_parameters.update(config["whisper"])
+    import OpenAI.whisper.OpenAI_Whisper_API as whisper_api
+    whisper_api.whisper_parameters.update(config["whisper"])
+    
+    # VTube Studio Settings
+    import VTubeStudioPlugin.VTubeStudioPlugin as vtsp
+    vtsp.AIVT_hotkeys_parameters.update(config["vtube_studio"])
+    
+    print(f"!!! Config loaded from {config_path} !!!")
+
+# Initialize parameters with defaults
+GUI_LLM_parameters = {
+    "model": "Gemini",
+    "instruction_enhance": True,
+    "instruction_enhance_i": 1,
+    "instruction_enhance_prompt": "",
+    "wdn_prompt": "",
+}
 AIVT_Character_prompt_filenames = [
     'character_prompt_01.txt', 'character_prompt_02.txt',
     'character_prompt_03.txt', 'character_prompt_04.txt',
@@ -223,12 +290,14 @@ def OpenAI_Whisper_thread(audio_frames, command=None):
         Mic_Record.save_audio2wav(audio_frames, user_mic_audio_path, )
 
         aprint("* Whisper Transcribing... *")
-        GUI_Conversation_History_list.append({
-            "chat_role": "system",
-            "chat_now": "",
-            "ai_name": "System",
-            "ai_ans": "Whisper 語音轉文字處理中..."
-        })
+        status_callback("Whisper 語音轉文字處理中...")
+        
+        # GUI_Conversation_History_list.append({  # Removed direct GUI dependency
+        #     "chat_role": "system",
+        #     "chat_now": "",
+        #     "ai_name": "System",
+        #     "ai_ans": "Whisper 語音轉文字處理中..."
+        # })
 
         if OpenAI_Whisper_Inference == "Local":
             ans_OpenAI_Whisper_text = whisper.run_with_timeout_OpenAI_Whisper(
@@ -253,7 +322,6 @@ def OpenAI_Whisper_thread(audio_frames, command=None):
 
         if ans_OpenAI_Whisper_text != "":
             role = "user_mic"
-            ans_OpenAI_Whisper_text = GUI_User_Name + " : " + ans_OpenAI_Whisper_text
             ans_requst = {"role": role, "content": ans_OpenAI_Whisper_text}
             OpenAI_Whisper_LLM_wait_list.append(ans_requst)
 
@@ -289,11 +357,11 @@ lock_LLM_Request = threading.Lock()
 
 def LLM_Request_thread(ans_request, llm_ans=None):
     global GUI_LLM_parameters, conversation
-    print(f"\n[DEBUG] LLM_Request_thread started. Role: {ans_request['role']}")
+    # print(f"\n[DEBUG] LLM_Request_thread started. Role: {ans_request['role']}")
     with lock_LLM_Request:
         role = ans_request["role"]
         conversation_now = ans_request["content"]
-        print(f"[DEBUG] Acquired LLM Lock. Processing content: {conversation_now[:30]}...")
+        # print(f"[DEBUG] Acquired LLM Lock. Processing content: {conversation_now[:30]}...")
 
         if role == "assistant":
             llm_ans.put("")
@@ -373,6 +441,7 @@ def LLM_Request_thread(ans_request, llm_ans=None):
                 temperature=gimini_api.gemini_parameters["temperature"],
                 timeout=gimini_api.gemini_parameters["timeout"],
                 retry=gimini_api.gemini_parameters["retry"],
+                command="no_print",
                 )
 
         elif GUI_LLM_parameters["model"] == "GPT":
@@ -384,6 +453,7 @@ def LLM_Request_thread(ans_request, llm_ans=None):
                 temperature=gpt_api.gpt_parameters["temperature"],
                 timeout=gpt_api.gpt_parameters["timeout"],
                 retry=gpt_api.gpt_parameters["retry"],
+                command="no_print",
                 )
 
         elif GUI_LLM_parameters["model"] == "Ollama":
@@ -396,6 +466,7 @@ def LLM_Request_thread(ans_request, llm_ans=None):
                 temperature=ollama_api.ollama_parameters["temperature"],
                 timeout=ollama_api.ollama_parameters["timeout"],
                 retry=ollama_api.ollama_parameters["retry"],
+                command="no_print",
                 )
 
         else:
@@ -414,6 +485,11 @@ def LLM_Request_thread(ans_request, llm_ans=None):
 
 
         elif llm_result != "":
+            # Data Cleaning: Remove timestamp tags like [11:47:18] and Ollama tokens
+            import re
+            llm_result = re.sub(r'^\[\d{1,2}:\d{2}:\d{2}\]\s*', '', llm_result)
+            llm_result = llm_result.replace("</end_of_turn>", "").strip()
+
             # Store with timestamp for memory, but return clean text
             timestamped_ans = f"[{current_time_str}] {llm_result}"
             conversation.append({"role": "assistant", "content": timestamped_ans})
@@ -477,7 +553,8 @@ def subtitles_speak_thread(chat_role, chat_now, ai_ans, ai_name):
     global GUI_Setting_read_chat_now, speaking_continue_count
 
     read_chat_role = ["user", "user_mic"]
-    read_chat_now = (GUI_Setting_read_chat_now and chat_role in read_chat_role) or (live_chat.Live_chat_parameters["yt_live_chat_read_chat_now"] and chat_role == "youtube_chat") or (live_chat.Live_chat_parameters["tw_live_chat_read_chat_now"] and chat_role == "twitch_chat")
+    # read_chat_now = (GUI_Setting_read_chat_now and chat_role in read_chat_role) or (live_chat.Live_chat_parameters["yt_live_chat_read_chat_now"] and chat_role == "youtube_chat") or (live_chat.Live_chat_parameters["tw_live_chat_read_chat_now"] and chat_role == "twitch_chat")
+    read_chat_now = (GUI_Setting_read_chat_now and chat_role in read_chat_role) # Simplified for personal use
 
     AIVT_VTSP_Status_authenticated = vtsp.AIVT_VTSP_Status["authenticated"]
 
@@ -846,22 +923,21 @@ def subtitles_speak(
         chat_now_tts_path,
         ai_ans_tts_path,
         emo_state,
-        AIVT_VTSP_Status_authenticated=False,
-        command=None
+        AIVT_VTSP_Status_authenticated=False
     ):
     global GUI_Setting_read_chat_now, GUI_VTSP_wait_until_hotkeys_complete
     global speaking_continue_count, speaking_continue_vtsp_hkns
 
 
-    show_chat_now = (chat_role in ["user", "user_mic", "youtube_chat", "twitch_chat"])
-    read_chat_now = show_chat_now and ((GUI_Setting_read_chat_now and chat_role in ["user", "user_mic"]) or (live_chat.Live_chat_parameters["yt_live_chat_read_chat_now"] and chat_role == "youtube_chat")) or (live_chat.Live_chat_parameters["tw_live_chat_read_chat_now"] and chat_role == "twitch_chat")
+    show_chat_now = (chat_role in ["user", "user_mic"]) # Removed streaming roles
+    read_chat_now = show_chat_now and (GUI_Setting_read_chat_now and chat_role in ["user", "user_mic"])
 
 
-    obs_show_chat_now = show_chat_now and obsws.OBS_Connected and obsws.OBS_chat_now_sub_parameters["show"]
-    obs_show_ai_ans = obsws.OBS_Connected and obsws.OBS_ai_ans_sub_parameters["show"]
+    obs_show_chat_now = False # Simplified for personal use
+    obs_show_ai_ans = False # Simplified for personal use
 
-    obs_sub_formatter = obsws.OBS_subtitles_parameters["subtitles_formatter"]
-    obs_sub_formatter_ver = obsws.OBS_subtitles_parameters["subtitles_formatter_version"]
+    obs_sub_formatter = False
+    obs_sub_formatter_ver = "v2"
 
     obs_chat_now_sub_name = obsws.OBS_chat_now_sub_parameters["sub_name"]
     obs_chat_now_show_sub_filter_names = obsws.OBS_chat_now_sub_parameters["show_sub_filter_names"]

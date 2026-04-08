@@ -25,11 +25,16 @@ AIVT_VTSP_Status = {
     "hotkey_trigger": False,
 }
 
+VTS_Parameters = {
+    "host": "127.0.0.1",
+    "port": 8001
+}
+
 AIVT_hotkeys_parameters = {
     "trigger_first": False,
     "Emo_state_categories": ["normal", "happy", "shy", "proud", "shock", "sad", "angry", "embarrass", "afraid", "confuse"],
     "sentiment_analysis": False,
-    "sentiment_analysis_model": "gemini-1.0-pro",
+    "sentiment_analysis_model": "gemini-1.5-flash",
     "idle_ani": "",
     "idle_ani_previous": "",
     "normal": True,
@@ -64,8 +69,11 @@ AIVT_previous_ani_exp = {
 
 
 
-def AIVT_VTSP_authenticated():
-    global AIVT_VTSP_Status, aivt_vtsp
+def AIVT_VTSP_authenticated(host=None, port=None):
+    global AIVT_VTSP_Status, aivt_vtsp, VTS_Parameters
+
+    if host: VTS_Parameters["host"] = host
+    if port: VTS_Parameters["port"] = port
 
     authentication_token_path = "VTubeStudioPlugin/VTSP_authentication_token.txt"
 
@@ -75,7 +83,11 @@ def AIVT_VTSP_authenticated():
     "authentication_token_path":authentication_token_path
     }
 
-    aivt_vtsp = pyvts.vts(plugin_info=AIVT_VTSP_info)
+    aivt_vtsp = pyvts.vts(
+        plugin_info=AIVT_VTSP_info, 
+        host=VTS_Parameters["host"], 
+        port=VTS_Parameters["port"]
+    )
 
     
     if os.path.exists(authentication_token_path):
@@ -83,23 +95,19 @@ def AIVT_VTSP_authenticated():
             asyncio.run(async_AIVT_VTSP_authenticated())
             AIVT_VTSP_Status["authenticated"] = True
             print("!!! VTSP Authenticated Success !!!")
-
         except:
             try:
                 asyncio.run(async_AIVT_VTSP_get_token_and_authenticated())
                 AIVT_VTSP_Status["authenticated"] = True
                 print("!!! VTSP Authenticated Success !!!")
-
             except:
                 AIVT_VTSP_Status["authenticated"] = False
                 print("!!! VTSP Authenticated Fail !!!")
-
     else:
         try:
             asyncio.run(async_AIVT_VTSP_get_token_and_authenticated())
             AIVT_VTSP_Status["authenticated"] = True
             print("!!! VTSP Authenticated Success !!!")
-
         except:
             AIVT_VTSP_Status["authenticated"] = False
             print("!!! VTSP Authenticated Fail !!!")
@@ -133,7 +141,7 @@ def VTSP_Hotkey_Names_Trigger(hotkey_names_list=[], command=None):
 
     with lock_hnt:
         if AIVT_VTSP_Status["authenticated"] and len(hotkey_names_list) > 0:
-            aprint(f"VTSP trigger hotkey names: {hotkey_names_list}")
+            # # aprint(f"VTSP trigger hotkey names: {hotkey_names_list}")
             asyncio.run(async_VTSP_Hotkey_Names_Trigger(hotkey_names_list, command=command))
 
 

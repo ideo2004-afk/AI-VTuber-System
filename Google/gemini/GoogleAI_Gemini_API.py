@@ -176,7 +176,7 @@ def GoogleAI_Gemini_API_thread(
     generation_config = types.GenerateContentConfig(
         system_instruction=system_instruction,
         safety_settings=safety_settings,
-        thinking_config=types.ThinkingConfig(thinking_budget=0), # Disables thinking
+        thinking_config=types.ThinkingConfig(thinking_budget=0), # Re-enabled for 2.5-flash
         max_output_tokens=max_output_tokens,
         temperature=temperature,
         tools=[types.Tool(google_search=types.GoogleSearch())],

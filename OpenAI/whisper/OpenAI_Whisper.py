@@ -7,6 +7,7 @@ import time
 import glob
 import gc
 
+from My_Tools.AIVT_print import aprint
 import whisper
 import torch
 
@@ -254,11 +255,11 @@ def run_with_timeout_OpenAI_Whisper(
     else:
         end_time = time.time()
         whisper_result = transcribe_ans.get()
-        print("\nOpenAI Whisper Local ----------\n")
-        print(f"Model: {model_name}")
-        print(f"Duration: {end_time - start_time:.2f}s\n")
-        print(f"Transcribe: {whisper_result}")
-        print("\n----------\n")
+        # print("\nOpenAI Whisper Local ----------\n")
+        # print(f"Model: {model_name}")
+        # print(f"Duration: {end_time - start_time:.2f}s\n")
+        print(f"使用者：{whisper_result}")
+        # print("\n----------\n")
         return whisper_result 
 
 

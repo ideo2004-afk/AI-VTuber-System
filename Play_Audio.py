@@ -107,22 +107,20 @@ def Get_available_output_devices_List():
 
 
 def Get_available_output_devices_ID(devices_name):
+    if not devices_name or devices_name.strip() == "":
+        return None 
+
     p = get_pyaudio()
     info = p.get_host_api_info_by_index(0)
     numdevices = info.get('deviceCount')
 
-    # find output device id by device name
+    # find output device id by device name (substring match)
     for i in range(0, numdevices):
         if (p.get_device_info_by_host_api_device_index(0, i).get('maxOutputChannels')) > 0:
-            if devices_name == p.get_device_info_by_host_api_device_index(0, i).get('name'):
+            if devices_name in p.get_device_info_by_host_api_device_index(0, i).get('name'):
                 return i
 
-    # if the name is not in output device list
-    #return default system audio output device
-    for i in range(0, numdevices):
-        if (p.get_device_info_by_host_api_device_index(0, i).get('maxOutputChannels')) > 0:
-            return i
-
+    # if not found, return None to use system default
     return None
 
 
