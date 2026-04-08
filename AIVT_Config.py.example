@@ -1,0 +1,20 @@
+# AIVT_Config.py Example Template
+# Copy this file to AIVT_Config.py and fill in your own keys
+
+# OpenAI API Key (Required for GPT models and character chat)
+openai_api_key = ""
+
+# Google API Key (Required for Gemini models)
+google_api_key = ""
+
+# OBS WebSocket Settings
+OBS_WebSockets_ip = "127.0.0.1"
+OBS_WebSockets_port = 4455
+OBS_WebSockets_password = ""
+
+# Twitch Integration
+Twitch_user_name = ""
+Twitch_token = ""
+
+# Ollama Local LLM
+ollama_base_url = "http://localhost:11434"
