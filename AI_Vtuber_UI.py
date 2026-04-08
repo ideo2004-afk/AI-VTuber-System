@@ -285,6 +285,9 @@ def OpenAI_Whisper_thread(audio_frames, command=None):
     global GUI_User_Name, OpenAI_Whisper_LLM_wait_list, OpenAI_Whisper_Inference
 
     with lock_OpenAI_Whisper:
+        # Force mic off immediately when processing starts
+        Mic_Record.user_mic_status["mic_on"] = False
+        
         user_mic_audio_path = Mic_Record.User_Mic_parameters["user_mic_audio_path"]
 
         Mic_Record.save_audio2wav(audio_frames, user_mic_audio_path, )
@@ -608,10 +611,17 @@ def subtitles_speak_thread(chat_role, chat_now, ai_ans, ai_name):
 
     speaking_continue_count -= 1
 
+    # Only restart mic if all speaking threads are finished and GUI_Auto_Mic_Mode is on
     if speaking_continue_count == 0 and getattr(GUI_Auto_Mic_Mode, "__class__", bool) and GUI_Auto_Mic_Mode:
-        import time
-        time.sleep(1.5)  # Wait for room echo/DAC buffers to clear before opening mic
-        GUI_Conversation_History_list.append({"chat_role": "system", "chat_now": "", "ai_name": "System", "ai_ans": "command:start_mic"})
+        # Extra safety: Ensure mic is definitely OFF before scheduling start
+        import Mic_Record as mcrc
+        mcrc.user_mic_status["mic_on"] = False
+        
+        time.sleep(1.8)  # Slightly longer delay to ensure DAC/virtual cables are clear
+        
+        # Double check again after sleep to prevent race conditions from new queue items
+        if speaking_continue_count == 0:
+            GUI_Conversation_History_list.append({"chat_role": "system", "chat_now": "", "ai_name": "System", "ai_ans": "command:start_mic"})
 
 
     with lock_remove_file:

@@ -5,6 +5,7 @@
     },
     "audio": {
         "output_device": "",
+        "vts_output_device": "多重輸入裝置",
         "mic_device": ""
     },
     "llm": {

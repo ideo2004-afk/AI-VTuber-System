@@ -37,11 +37,13 @@ class AIVT_Core:
         aivtui.Initialize_conversation(self.config["user"]["character"])
         
         # 4. Connect to VTube Studio (optional)
+        self.vts_thread = None
         if self.config["vtube_studio"]["enabled"]:
             vts_choice = input("\n連結 VTube Studio？[y/N]: ").strip().lower()
             if vts_choice == "y":
                 aprint("* Connecting to VTube Studio... *")
-                threading.Thread(target=self.init_vtsp, daemon=True).start()
+                self.vts_thread = threading.Thread(target=self.init_vtsp, daemon=True)
+                self.vts_thread.start()
             else:
                 aprint("* 跳過 VTube Studio 連線 *")
 
@@ -96,6 +98,18 @@ class AIVT_Core:
         
         aprint(f"\n[System Ready] User: {self.config['user']['name']} | Character: {self.config['user']['character']}")
         
+        # Wait for VTS connection to settle, then set audio output accordingly
+        import Play_Audio as pla
+        if self.vts_thread:
+            self.vts_thread.join(timeout=10)
+        if vtsp.AIVT_VTSP_Status["authenticated"]:
+            device = self.config["audio"].get("vts_output_device", "BlackHole 2ch")
+            aprint(f"* 音訊輸出 → {device} (VTS模式) *")
+        else:
+            device = self.config["audio"].get("output_device", "")
+            aprint(f"* 音訊輸出 → 系統預設 *")
+        pla.play_audio_parameters["ai_voice_output_device_name"] = device
+        
         aprint("Listening... (Press Ctrl+C to exit)\n")
         
         try:
@@ -123,6 +137,8 @@ class AIVT_Core:
                             self.start_mic_recording()
                             break
                         elif cmd == "command:force_stop_mic":
+                            aprint("* Mic Forced Stop (Processing) *")
+                            mcrc.user_mic_status["mic_on"] = False
                             aivtui.GUI_Conversation_History_list.remove(event)
                 
                 time.sleep(0.1)

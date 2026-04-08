@@ -87,6 +87,11 @@ def MC_Record():
     dmhp.start()
 
     while user_mic_status["mic_on"]:
+        # Safety Guard: Never record while AI is speaking
+        if aivtui.speaking_continue_count > 0:
+            time.sleep(0.5)
+            continue
+            
         should_record = Mic_hotkey_pressed or (not user_mic_status.get("mic_hotkeys_using", False))
         if should_record:
             frames = []
